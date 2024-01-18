@@ -1,12 +1,12 @@
+-- STEP 0
 create role webanon nologin;
 create role webuser nologin;
-
 grant usage on schema api to webanon;
 grant usage on schema api to webuser;
-
 grant webanon to authenticator;
 grant webuser to authenticator;
 
+-- STEP 1
 -- create our main table
 create table if not exists api.sales (
   id serial primary key not null,
@@ -27,24 +27,25 @@ grant usage, select on sequence api.sales_id_seq to webuser;
 -- tell PostgREST to update it's schema
 NOTIFY pgrst, 'reload schema';
 
--- ** load the data
+-- load the data
 -- curl http://localhost:3000/sales -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @Warehouse_and_Retail_Sales.json
 
--- ** how many records are there?
+-- how many records are there?
 -- curl http://localhost:3000/sales?select=id.count()
 
--- ** I noticed there are records with no supplier
+-- I noticed there are records with no supplier
 -- curl http://localhost:3000/sales?supplier=eq.
 
--- ** how many?
+-- how many?
 -- curl http://localhost:3000/sales?supplier=eq.&select=id.count()
 
--- ** What do those look like?
+-- What do those look like?
 -- curl http://localhost:3000/sales?supplier=eq.&select=item_description,item_type&order=item_description
 
--- ** let's patch them using a "NO SUPPLIER"
+-- let's patch them using a "NO SUPPLIER"
 -- curl 'http://localhost:3000/sales?supplier=eq.' -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"supplier": "NO SUPPLIER"}'
 
+-- STEP 2
 -- create our supplier table
 create table if not exists api.supplier (
 	id serial primary key not null,
@@ -60,7 +61,7 @@ alter table api.sales
 		references api.supplier (id)
 		on update cascade
 		on delete cascade;
--- then pull in the ids
+-- then pull in the supplier ids
 update api.sales as sa
 	set supplier_id = (
 		select id from api.supplier as su where su.name = sa.supplier
@@ -69,16 +70,18 @@ update api.sales as sa
 alter table api.sales alter supplier_id set not null;
 -- drop supplier
 alter table api.sales drop column supplier;
--- grant
+-- grant permissions
 grant select on api.supplier to webanon;
 grant all on api.supplier to webuser;
 grant usage, select on sequence api.supplier_id_seq to webuser;
+-- tell PostgREST to update it's schema
 NOTIFY pgrst, 'reload schema';
 
 -- curl http://localhost:3000/sales?select=item_description,supplier(id,name)&limit=10
-
 -- curl http://localhost:3000/sales?limit=10
 
+-- STEP 3
+-- create our item table
 create table api.item (
 	id serial primary key,
 	code text not null,
@@ -86,19 +89,10 @@ create table api.item (
 	type text not null,
 	unique(code,description,type)
 );
--- grant
-grant select on api.item to webanon;
-grant all on api.item to webuser;
-grant usage, select on sequence api.item_id_seq to webuser;
-
-NOTIFY pgrst, 'reload schema';
-
--- check the schema
-
+-- populate the item table
 insert into api.item (
 	code, description, type
 ) select distinct item_code, item_description, item_type from api.sales;
-
 -- alter the api.sales table to add foreign key on item
 alter table api.sales
 	add column item_id integer
@@ -106,21 +100,19 @@ alter table api.sales
 		references api.item (id)
 		on update cascade
 		on delete cascade;
-
--- then pull in the ids
+-- then pull in the item ids
 update api.sales as S
 	set item_id = (
 		select id from api.item as I where I.code = S.item_code and I.description = S.item_description and I.type = S.item_type
 	);
-
+-- do some table maintenance
 alter table api.sales alter item_id set not null;
-
-create index sales_idx on api.item (description) with (deduplicate_items = off);
-
-NOTIFY pgrst, 'reload schema';
-
 alter table api.sales drop column item_code, drop item_description, drop item_type;
-
+-- grant permissions
+grant select on api.item to webanon;
+grant all on api.item to webuser;
+grant usage, select on sequence api.item_id_seq to webuser;
+-- tell PostgREST to update it's schema
 NOTIFY pgrst, 'reload schema';
 
 -- join
