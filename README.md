@@ -191,3 +191,5 @@ curl -s ${PGRST_ADDRESS}/rpc/archive \
   1
 ]
 ```
+
+## Using Helm
