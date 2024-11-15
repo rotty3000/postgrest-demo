@@ -126,7 +126,7 @@ tolerations: []
 
 affinity: {}
 
-## Sub-charts
+# Sub-charts
 
 postgres:
   enabled: true
