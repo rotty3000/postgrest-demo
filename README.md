@@ -35,7 +35,7 @@ docker network create -d bridge postgrest-demo
 
 ### Setup PostgreSQL
 
-Get a Postgresql instance running using docker:
+Get [a Postgresql that has PGMQ extension](https://quay.io/repository/tembo/pg17-pgmq?tab=tags) running using docker:
 
 _(**Note:** remember to set a strong password for the DB. This assumes it's stored in environment variable called `POSTGRESQL_PASSWORD`)_
 
