@@ -5,6 +5,7 @@
 Everything here assumes Linux based environment. You will need to translate some of this for Windows environments.
 
 What you need to have installed locally:
+
 - `bash` (or something close)
 - `tr`
 - `head`
@@ -15,13 +16,14 @@ What you need to have installed locally:
 ### Initial Setup
 
 Create 3 strong passwords and store them in the following environment variables:
+
 ```shell
 make_secret() {
   echo "$(LC_CTYPE=C LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c32)"
 }
 
 export POSTGRESQL_PASSWORD=$(make_secret)
-export PGRST_AUTENTICATOR_PASSWORD=$(make_secret)
+export PGRST_AUTHENTICATOR_PASSWORD=$(make_secret)
 export PGRST_JWT_SECRET=$(make_secret)
 ```
 
@@ -35,47 +37,56 @@ docker network create -d bridge postgrest-demo
 
 Get a Postgresql instance running using docker:
 
-_(__Note:__ remember to set a strong password for the DB. This assumes it's stored in environment variable called `POSTGRESQL_PASSWORD`)_
+_(**Note:** remember to set a strong password for the DB. This assumes it's stored in environment variable called `POSTGRESQL_PASSWORD`)_
 
 ```shell
-docker pull postgres
+docker pull quay.io/tembo/pg17-pgmq
 
-docker run -d --name pg-sql --network postgrest-demo \
+docker run -d --name postgres --network postgrest-demo \
 	-e "POSTGRES_PASSWORD=${POSTGRESQL_PASSWORD}" \
-	-d postgres
+	-d quay.io/tembo/pg17-pgmq
 ```
 
-Execute the following command to get minimal DB objects required to run PostgREST. (This executes the SQL in `schema-0.sql`, go check it out):
+Execute the following command to get minimal DB objects required to run PostgREST:
 
 ```shell
 SQL=$(eval "echo \"$(<schema-0.sql)\"" 2> /dev/null)
-docker exec -it pg-sql psql -U postgres -c "$SQL"
+docker exec -it postgres psql -U postgres -c "$SQL"
 ```
 
 You can also connect to the `psql` console using the following docker command:
 
 ```shell
-docker exec -it pg-sql psql -U postgres"
+docker exec -it postgres psql -U postgres
 ```
 
-You should see a command prompt.
+You should see the psql prompt.
+
+Look at at the objects in the schema (`pgmq` in this case):
+
+```shell
+# (tables)
+\dt pgmq.*
+# (functions)
+\df pgmq.*
+```
 
 ### Setup PostgREST
 
 Get a PostgREST instance running using docker:
 
-_(__Note:__ remember to set a strong password for the authenticator role and the jwt-secret. This assumes these are stored in environment variables called `PGRST_AUTENTICATOR_PASSWORD` and `PGRST_JWT_SECRET` respectively.)_
+_(**Note:** remember to set a strong password for the authenticator role and the jwt-secret. This assumes these are stored in environment variables called `PGRST_AUTHENTICATOR_PASSWORD` and `PGRST_JWT_SECRET` respectively.)_
 
 ```shell
 docker pull postgrest/postgrest
 
 docker run -d --name pg-rest --network postgrest-demo \
-	-e "PGRST_DB_URI=postgres://authenticator:${PGRST_AUTENTICATOR_PASSWORD}@pg-sql:5432/postgres" \
+	-e "PGRST_DB_URI=postgres://authenticator:${PGRST_AUTHENTICATOR_PASSWORD}@postgres:5432/postgres" \
 	-e "PGRST_DB_ANON_ROLE=webanon" \
-	-e "PGRST_DB_SCHEMAS=api" \
+	-e "PGRST_DB_SCHEMAS=pgmq" \
 	-e "PGRST_JWT_SECRET=${PGRST_JWT_SECRET}" \
-	-e "PGRST_LOG_LEVEL=info" \
-	-d postgrest/postgrest:v12.0.1
+	-e "PGRST_LOG_LEVEL=debug" \
+	-d postgrest/postgrest
 ```
 
 Test your installation by checking the container logs:
@@ -104,26 +115,9 @@ PGRST_ADDRESS="http://$(docker container inspect pg-rest | jq -r '.[] | .Network
 curl ${PGRST_ADDRESS} | jq
 ```
 
-There isn't much there but you can see that PostgREST provides a Open API schema already with the only path being the self describing OpenAPI at the root `/`.
+You should see the Open API schema.
 
-### Adding Schema by Creating Tables
-
-Let's make things more interesting by adding a table and grant access.
-
-Execute the following. (This executes the SQL in `schema-1.sql`, go check it out):
-
-```shell
-SQL=$(eval "echo \"$(<schema-1.sql)\"" 2> /dev/null)
-docker exec -it pg-sql psql -U postgres -c "$SQL"
-```
-
-Now you should see new paths you can observe by checking the update Open API:
-
-```shell
-curl ${PGRST_ADDRESS} | jq '.paths'
-```
-
-### Bulk Insert Data using REST (WITH JWT authentication)
+### Adding a Queue (WITH JWT authentication)
 
 Ok, let's take the level up and generate a JWT we can use to leverage bulk update through the REST API. (We could do bulk insert via psql but what's the fun in that.)
 
@@ -133,39 +127,67 @@ Create a JWT token and hold it. We're using Bitnami's containerized version of [
 JWT_TOKEN="$(docker run --rm bitnami/jwt-cli encode -S ${PGRST_JWT_SECRET} -P role=webuser)"
 ```
 
-We can now use the token to make authenticated requests via curl. This one will POST our json data file to populate our table:
+### Create a Queue
 
 ```shell
-curl ${PGRST_ADDRESS}/sales -X POST \
+curl -s "${PGRST_ADDRESS}/rpc/create" \
 	-H "Authorization: Bearer $JWT_TOKEN" \
-	-H "Content-Type: application/json" \
-	-d @Warehouse_and_Retail_Sales.json
+	--json '{"queue_name": "bar"}'
 ```
 
-This great, but it's pretty boring database so let's normalize the data a bit so we can do things like joins.
-
-Execute the following. (This executes the SQL in `schema-2.sql`, go check it out):
+### List Queues
 
 ```shell
-SQL=$(eval "echo \"$(<schema-2.sql)\"" 2> /dev/null)
-docker exec -it pg-sql psql -U postgres -c "$SQL"
+curl -s ${PGRST_ADDRESS}/rpc/list_queues \
+	-H "Authorization: Bearer $JWT_TOKEN" \
+	-H "Content-Type: application/json" | jq
+[
+  {
+    "queue_name": "bar",
+    "is_partitioned": false,
+    "is_unlogged": false,
+    "created_at": "2024-11-14T21:14:15.035969+00:00"
+  }
+]
 ```
 
-Finally, execute the following. (This executes the SQL in `schema-3.sql`, go check it out):
+### Send a message to the queue
 
 ```shell
-SQL=$(eval "echo \"$(<schema-3.sql)\"" 2> /dev/null)
-docker exec -it pg-sql psql -U postgres -c "$SQL"
+curl -s ${PGRST_ADDRESS}/rpc/send \
+	-H "Authorization: Bearer $JWT_TOKEN" \
+	--json '{"queue_name":"bar","msg":{"the":"message"}}' | jq
+[
+  1
+]
 ```
 
-Now we have a prettier schema and we can try some interesting requests to explore the power of PostgREST:
+### Read a message from the queue
 
 ```shell
-# join
-curl ${PGRST_ADDRESS}/sales?select=*,supplier(*),item(*)&limit=10
-
-# reverse join
-curl ${PGRST_ADDRESS}/supplier?select=*,sales(*,item(*))&limit=10
+curl -s ${PGRST_ADDRESS}/rpc/read \
+	-H "Authorization: Bearer $JWT_TOKEN" \
+	--json '{"queue_name":"bar","qty": 10, "vt": 30}' | jq
+[
+  {
+    "msg_id": 1,
+    "read_ct": 1,
+    "enqueued_at": "2024-11-14T21:28:18.063172+00:00",
+    "vt": "2024-11-14T21:30:50.764849+00:00",
+    "message": {
+      "the": "message"
+    }
+  }
+]
 ```
 
-Enjoy!
+### Archive a message from the queue
+
+```shell
+curl -s ${PGRST_ADDRESS}/rpc/archive \
+	-H "Authorization: Bearer $JWT_TOKEN" \
+	--json '{"queue_name":"bar","msg_ids": [1]}' | jq
+[
+  1
+]
+```
