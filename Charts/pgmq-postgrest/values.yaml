@@ -1,3 +1,6 @@
+postgresqlAuthUsername: &postgresqlAuthUsername authenticator
+healthPort: &healthPort "4000"
+
 # Default values for pgmq-postgrest.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
@@ -33,7 +36,8 @@ serviceAccount:
 
 # This is for setting Kubernetes Annotations to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
-podAnnotations: {}
+podAnnotations:
+  app: postgrest
 # This is for setting Kubernetes Labels to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
@@ -46,28 +50,61 @@ securityContext:
   {}
   # capabilities:
   #   drop:
-  #   - ALL
+  #     - ALL
   # readOnlyRootFilesystem: true
   # runAsNonRoot: true
   # runAsUser: 1000
+
+# This is for setting up environment variables on the primary container
+deployment:
+  env:
+    - name: PGHOST
+      value: postgrest-over-pgmq-postgresql
+    - name: PGPORT
+      value: "5432"
+    - name: PGUSER
+      value: *postgresqlAuthUsername
+    - name: PGPASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: postgresql-secret
+          key: password
+    - name: PGDATABASE
+      value: postgres
+    - name: PGRST_DB_ANON_ROLE
+      value: webanon
+    - name: PGRST_DB_SCHEMAS
+      value: pgmq
+    - name: PGRST_JWT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: postgresql-secret
+          key: jwt-secret
+    - name: PGRST_LOG_LEVEL
+      value: debug
+    - name: PGRST_ADMIN_SERVER_PORT
+      value: *healthPort
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
   # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
   type: ClusterIP
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
-  port: 80
+  port: 3000
+
+health:
+  port: *healthPort
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
-  enabled: false
+  enabled: true
   className: ""
   annotations:
-    {}
+    ingress.kubernetes.io/ssl-redirect: "false"
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   hosts:
-    - host: chart-example.local
+    - host: postgrest.docker.localhost
       paths:
         - path: /
           pathType: ImplementationSpecific
@@ -92,12 +129,12 @@ resources:
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 livenessProbe:
   httpGet:
-    path: /
-    port: http
+    path: /live
+    port: health
 readinessProbe:
   httpGet:
-    path: /
-    port: http
+    path: /ready
+    port: health
 
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
@@ -128,8 +165,60 @@ affinity: {}
 
 # Sub-charts
 
-postgres:
+postgresql:
   enabled: true
   image:
-    repository: quay.io/repository/tembo/pg17-pgmq
-    tag: v9692b78
+    debug: true
+  # registry: quay.io
+  # repository: tembo/pg17-pgmq
+  # tag: v1.4.5
+
+  # make_secret() {
+  #   echo "$(LC_CTYPE=C LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c32)"
+  # }
+  #
+  # kubectl create secret generic postgresql-secret \
+  #  --from-literal=postgres-password="$(make_secret)" \
+  #  --from-literal=password="$(make_secret)" \
+  #  --from-literal=replication-password="$(make_secret)"
+  #  --from-literal=jwt-secret="$(make_secret)"
+  auth:
+    existingSecret: postgresql-secret
+
+  primary:
+    extraEnvVars:
+      - name: PGRST_AUTHENTICATOR_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: postgresql-secret
+            key: password
+      - name: PGUSER
+        value: *postgresqlAuthUsername
+    initdb:
+      scripts:
+        init.sh: |
+          #!/bin/bash
+
+          export PGPASSWORD=${POSTGRES_PASSWORD}
+          psql -U ${POSTGRESQL_USERNAME} <<-END
+            \conninfo
+            -- create extension pgmq;
+            create schema pgmq;
+
+            create role ${PGUSER} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
+            create role webanon nologin;
+            create role webuser nologin;
+            grant webanon to ${PGUSER};
+            grant webuser to ${PGUSER};
+
+            grant usage on schema pgmq to webanon;
+
+            -- grant usage on schema pgmq to webuser;
+            --| grant permissions
+            -- alter default privileges in schema pgmq grant select on tables to webuser;
+            -- grant select on pgmq.meta to webuser;
+            -- grant all on schema pgmq to webuser;
+
+            grant ${PGUSER} to webuser;
+            NOTIFY pgrst, 'reload schema';
+          END
