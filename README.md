@@ -112,10 +112,20 @@ At this stage you have a schema to look at. You can visit it at the following ad
 ```shell
 PGRST_ADDRESS="http://$(docker container inspect pg-rest | jq -r '.[] | .NetworkSettings.Networks["postgrest-demo"].IPAddress'):3000"
 
+# OR
+
+PGRST_ADDRESS="http://postgrest.docker.localhost:8880"
+
 curl ${PGRST_ADDRESS} | jq
 ```
 
 You should see the Open API schema.
+
+### List the paths from the OpenAPI schema
+
+```shell
+curl -s ${PGRST_ADDRESS} | jq '.paths | keys'
+```
 
 ### Adding a Queue (WITH JWT authentication)
 
@@ -124,6 +134,8 @@ Ok, let's take the level up and generate a JWT we can use to leverage bulk updat
 Create a JWT token and hold it. We're using Bitnami's containerized version of [jwt-cli](https://github.com/mike-engel/jwt-cli) to simplify our lives. It helps us create HS256 JWT tokens from the command line:
 
 ```shell
+PGRST_ADDRESS="http://postgrest.docker.localhost:8880"
+PGRST_JWT_SECRET=$(k get secrets postgresql-secret -o jsonpath="{.data['jwt-secret']}" | base64 -d)
 JWT_TOKEN="$(docker run --rm bitnami/jwt-cli encode -S ${PGRST_JWT_SECRET} -P role=webuser)"
 ```
 
@@ -132,7 +144,7 @@ JWT_TOKEN="$(docker run --rm bitnami/jwt-cli encode -S ${PGRST_JWT_SECRET} -P ro
 ```shell
 curl -s "${PGRST_ADDRESS}/rpc/create" \
 	-H "Authorization: Bearer $JWT_TOKEN" \
-	--json '{"queue_name": "bar"}'
+	--json '{"queue_name": "bar"}' | jq
 ```
 
 ### List Queues

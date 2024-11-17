@@ -169,9 +169,9 @@ postgresql:
   enabled: true
   image:
     debug: true
-  # registry: quay.io
-  # repository: tembo/pg17-pgmq
-  # tag: v1.4.5
+    registry: registry:5000
+    repository: rotty3000/pgmq-bitnami
+    tag: 1.5.0-pg17-deb12
 
   # make_secret() {
   #   echo "$(LC_CTYPE=C LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c32)"
@@ -194,13 +194,6 @@ postgresql:
             key: password
       - name: PGUSER
         value: *postgresqlAuthUsername
-    preInitDb:
-      scripts:
-        00_preinit.sh: |
-          #!/bin/bash
-
-          # ls -l /tmp/pgmq-v1.4.5.tar.gz
-          # /opt/bitnami/postgresql/share/extension/
     initdb:
       scripts:
         00_init.sh: |
@@ -208,9 +201,7 @@ postgresql:
 
           export PGPASSWORD=${POSTGRES_PASSWORD}
           psql -U ${POSTGRESQL_USERNAME} <<-END
-            \conninfo
-            -- create extension pgmq;
-            create schema pgmq;
+            create extension pgmq;
 
             create role ${PGUSER} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
             create role webanon nologin;
@@ -219,13 +210,8 @@ postgresql:
             grant webuser to ${PGUSER};
 
             grant usage on schema pgmq to webanon;
+            grant usage on schema pgmq to webuser;
+            grant ${POSTGRESQL_USERNAME} to webuser;
 
-            -- grant usage on schema pgmq to webuser;
-            --| grant permissions
-            -- alter default privileges in schema pgmq grant select on tables to webuser;
-            -- grant select on pgmq.meta to webuser;
-            -- grant all on schema pgmq to webuser;
-
-            grant ${PGUSER} to webuser;
             NOTIFY pgrst, 'reload schema';
           END
