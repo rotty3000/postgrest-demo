@@ -192,7 +192,7 @@ postgresql:
           secretKeyRef:
             name: postgresql-secret
             key: password
-      - name: PGUSER
+      - name: PGRST_AUTHENTICATOR_USERNAME
         value: *postgresqlAuthUsername
     initdb:
       scripts:
@@ -203,11 +203,11 @@ postgresql:
           psql -U ${POSTGRESQL_USERNAME} <<-END
             create extension pgmq;
 
-            create role ${PGUSER} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
+            create role ${PGRST_AUTHENTICATOR_USERNAME} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
             create role webanon nologin;
             create role webuser nologin;
-            grant webanon to ${PGUSER};
-            grant webuser to ${PGUSER};
+            grant webanon to ${PGRST_AUTHENTICATOR_USERNAME};
+            grant webuser to ${PGRST_AUTHENTICATOR_USERNAME};
 
             grant usage on schema pgmq to webanon;
             grant usage on schema pgmq to webuser;
