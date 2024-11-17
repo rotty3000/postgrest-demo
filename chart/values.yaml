@@ -194,9 +194,16 @@ postgresql:
             key: password
       - name: PGUSER
         value: *postgresqlAuthUsername
+    preInitDb:
+      scripts:
+        00_preinit.sh: |
+          #!/bin/bash
+
+          # ls -l /tmp/pgmq-v1.4.5.tar.gz
+          # /opt/bitnami/postgresql/share/extension/
     initdb:
       scripts:
-        init.sh: |
+        00_init.sh: |
           #!/bin/bash
 
           export PGPASSWORD=${POSTGRES_PASSWORD}
