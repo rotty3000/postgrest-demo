@@ -1,5 +1,5 @@
 postgresqlAuthUsername: &postgresqlAuthUsername authenticator
-healthPort: &healthPort "4000"
+postgrestHealthPort: &postgrestHealthPort "4000"
 
 # Default values for pgmq-postgrest.
 # This is a YAML-formatted file.
@@ -83,7 +83,7 @@ deployment:
     - name: PGRST_LOG_LEVEL
       value: debug
     - name: PGRST_ADMIN_SERVER_PORT
-      value: *healthPort
+      value: *postgrestHealthPort
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
@@ -93,7 +93,7 @@ service:
   port: 3000
 
 health:
-  port: *healthPort
+  port: *postgrestHealthPort
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
