@@ -37,13 +37,37 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            {{- toYaml .Values.deployment.env | nindent 12 }}
+            - name: PGDATABASE
+              value: {{ default "postgres" .Values.postgresql.auth.database }}
+            - name: PGHOST
+              value: {{ .Release.Name }}-{{ default "postgresql" .Values.postgresql.nameOverride }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "pgmq-postgrest.secretName" . }}
+                  key: password
+            - name: PGPORT
+              value: {{ default "5432" .Values.postgresql.containerPorts.postgresql | quote }}
+            - name: PGRST_ADMIN_SERVER_PORT
+              value: {{ .Values.config.postgrest.healthCheckPort | quote }}
+            - name: PGRST_DB_ANON_ROLE
+              value: {{ default "anonymous" .Values.config.postgrest.anonymousRole }}
+            - name: PGRST_DB_SCHEMAS
+              value: {{ default "pgmq" .Values.config.postgrest.schema }}
+            - name: PGRST_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "pgmq-postgrest.secretName" . }}
+                  key: {{ default "jwt-secret" .Values.config.secret.jwtSecretKey }}
+            - name: PGUSER
+              value: {{ .Values.config.postgrest.authenticatorRole }}
+            {{- toYaml .Values.config.postgrest.extraEnvVars | nindent 12 }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
             - name: health
-              containerPort: {{ .Values.health.port }}
+              containerPort: {{ .Values.config.postgrest.healthCheckPort }}
               protocol: TCP
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
