@@ -23,20 +23,29 @@ Create a secret to contain security values:
   kubectl create secret generic postgresql-secret \
    --from-literal=postgres-password="$(make_secret)" \
    --from-literal=password="$(make_secret)" \
-   --from-literal=replication-password="$(make_secret)"
+   --from-literal=replication-password="$(make_secret)" \
    --from-literal=jwt-secret="$(make_secret)"
 ```
 
+> **TODO**: [Auto Generate Secret](https://itnext.io/manage-auto-generated-secrets-in-your-helm-charts-5aee48ba6918)
+
 #### Create a Kubernetes cluster
 
+This uses k3d to create a local Kubernetes cluster
+
 ```shell
-k3d cluster create postgrest-over-pgmq -p "8880:80@loadbalancer" --registry-create registry:0.0.0.0:5000
+k3d cluster create playground -p "8880:80@loadbalancer" --registry-create registry:0.0.0.0:5000
 ```
 
 ### Install the chart
 
 ```shell
 cd ./chart
+helm upgrade -i postgrest-over-pgmq .
+
+# To redeploy clean do:
+helm uninstall postgrest-over-pgmq .
+k delete pvc data-postgrest-over-pgmq-postgresql-0
 helm upgrade -i postgrest-over-pgmq .
 ```
 
@@ -48,13 +57,13 @@ export PGPASSWORD=${POSTGRES_PASSWORD}
 psql -U postgres
 ```
 
-Look at at the objects in the schema (`pgmq` in this case):
+Look at at the objects in the schema:
 
 ```shell
 # (tables)
-\dt pgmq.*
+\dt <schema>.*
 # (functions)
-\df pgmq.*
+\df <schema>.*
 ```
 
 You can visit it at the following address:

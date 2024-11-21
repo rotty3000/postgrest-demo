@@ -53,7 +53,7 @@ spec:
             - name: PGRST_DB_ANON_ROLE
               value: {{ default "anonymous" .Values.config.postgrest.anonymousRole }}
             - name: PGRST_DB_SCHEMAS
-              value: {{ default "pgmq" .Values.config.postgrest.schema }}
+              value: {{ default "rest" .Values.config.postgrest.schema }}
             - name: PGRST_JWT_SECRET
               valueFrom:
                 secretKeyRef:

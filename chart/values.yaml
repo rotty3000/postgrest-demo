@@ -140,18 +140,23 @@ config:
         value: debug
     healthCheckPort: 4000
     loggedinRole: &postgrestLoggedinRole loggedin
-    schemas: pgmq
+    schema: &postgrestSchema rest
 
 # Sub-charts
 
+keycloak:
+  enabled: false
+minio:
+  enabled: false
+rabbitmq:
+  enabled: false
 postgresql:
   enabled: true
-
-  image:
-    debug: true
-    registry: registry:5000
-    repository: rotty3000/pgmq-bitnami
-    tag: 1.5.0-pg17-deb12
+  # image:
+  #   debug: true
+  #   registry: registry:5000
+  #   repository: rotty3000/pgmq-bitnami
+  #   tag: 1.5.0-pg17-deb12
 
   auth:
     existingSecret: &configSecretName postgresql-secret
@@ -167,6 +172,8 @@ postgresql:
         value: *postgrestAuthenticatorRole
       - name: PGRST_ANONYMOUS_ROLE
         value: *postgrestAnonymousRole
+      - name: PGRST_DB_SCHEMAS
+        value: *postgrestSchema
       - name: PGRST_LOGGEDIN_ROLE
         value: *postgrestLoggedinRole
     initdb:
@@ -176,17 +183,16 @@ postgresql:
 
           export PGPASSWORD=${POSTGRES_PASSWORD}
           psql -U ${POSTGRESQL_USERNAME} <<-END
-            create extension pgmq;
-
             create role ${PGRST_AUTHENTICATOR_ROLE} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
             create role ${PGRST_ANONYMOUS_ROLE} nologin;
             create role ${PGRST_LOGGEDIN_ROLE} nologin;
             grant ${PGRST_ANONYMOUS_ROLE} to ${PGRST_AUTHENTICATOR_ROLE};
             grant ${PGRST_LOGGEDIN_ROLE} to ${PGRST_AUTHENTICATOR_ROLE};
-
-            grant usage on schema pgmq to ${PGRST_ANONYMOUS_ROLE};
-            grant usage on schema pgmq to ${PGRST_LOGGEDIN_ROLE};
             grant ${POSTGRESQL_USERNAME} to ${PGRST_LOGGEDIN_ROLE};
+
+            create schema ${PGRST_DB_SCHEMAS};
+            grant usage on schema ${PGRST_DB_SCHEMAS} to ${PGRST_ANONYMOUS_ROLE};
+            grant usage on schema ${PGRST_DB_SCHEMAS} to ${PGRST_LOGGEDIN_ROLE};
 
             NOTIFY pgrst, 'reload schema';
           END
