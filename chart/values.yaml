@@ -21,14 +21,9 @@ fullnameOverride: ""
 
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
-  # Specifies whether a service account should be created
   create: true
-  # Automatically mount a ServiceAccount's API credentials?
   automount: true
-  # Annotations to add to the service account
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
   name: ""
 
 # This is for setting Kubernetes Annotations to a Pod.
@@ -38,18 +33,9 @@ podAnnotations: {}
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
 
-podSecurityContext:
-  {}
-  # fsGroup: 2000
+podSecurityContext: {}
 
-securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #     - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext: {}
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
@@ -64,30 +50,14 @@ ingress:
   className: ""
   annotations:
     ingress.kubernetes.io/ssl-redirect: "false"
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
   hosts:
     - host: postgrest.docker.localhost
       paths:
         - path: /
           pathType: ImplementationSpecific
   tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
 
-resources:
-  {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+resources: {}
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 livenessProbe:
@@ -105,20 +75,12 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 100
   targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
 
 # Additional volumes on the output Deployment definition.
 volumes: []
-# - name: foo
-#   secret:
-#     secretName: mysecret
-#     optional: false
 
 # Additional volumeMounts on the output Deployment definition.
 volumeMounts: []
-# - name: foo
-#   mountPath: "/etc/foo"
-#   readOnly: true
 
 nodeSelector: {}
 
@@ -126,73 +88,110 @@ tolerations: []
 
 affinity: {}
 
-# Custom config
+# Custom playground config
 
-config:
-  secret:
-    createdManually: true
-    jwtSecretKey: jwt-secret
+playground:
   postgrest:
-    anonymousRole: &postgrestAnonymousRole anonymous
-    authenticatorRole: &postgrestAuthenticatorRole authenticator
+    anonymousRole: anonymous
+    authenticatorRole: authenticator
     extraEnvVars:
       - name: PGRST_LOG_LEVEL
         value: debug
     healthCheckPort: 4000
-    loggedinRole: &postgrestLoggedinRole loggedin
-    schema: &postgrestSchema rest
+    jwtSecretKey: postgrest-jwt-secret
+    loggedinRole: loggedin
+    schema: postgrest
+  secret:
+    createdManually: true
+    name: playground-secret
 
 # Sub-charts
 
 keycloak:
-  enabled: false
+  enabled: true
+  externalDatabase:
+    existingSecret: "{{ .Values.playground.secret.name }}"
+    existingSecretDatabaseKey: '{{ .Release.Name }}-{{ default "postgresql" .Values.postgresql.nameOverride }}'
+    existingSecretHostKey: postgres-host
+    existingSecretPasswordKey: postgres-keycloak-password
+    existingSecretPortKey: postgres-port
+    existingSecretUserKey: postgres-keycloak-user
+  ingress:
+    enabled: true
+    labels:
+      ingress.kubernetes.io/ssl-redirect: "false"
+    hostname: keycloak.docker.localhost
+
+  postgresql:
+    enabled: false
+
 minio:
   enabled: false
+
 rabbitmq:
   enabled: false
+
 postgresql:
+  auth:
+    database: postgres
+    existingSecret: "{{ .Values.playground.secret.name }}"
+    secretKeys:
+      userPasswordKey: password
+
   enabled: true
-  # image:
-  #   debug: true
+  image:
+    debug: true
   #   registry: registry:5000
   #   repository: rotty3000/pgmq-bitnami
   #   tag: 1.5.0-pg17-deb12
 
-  auth:
-    existingSecret: &configSecretName postgresql-secret
-
   primary:
     extraEnvVars:
+      - name: KC_DATABASE_DATABASE
+        valueFrom:
+          secretKeyRef:
+            name: "{{ .Values.playground.secret.name }}"
+            key: "{{ .Values.keycloak.externalDatabase.existingSecretDatabaseKey }}"
+      - name: KC_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: "{{ .Values.playground.secret.name }}"
+            key: "{{ .Values.keycloak.externalDatabase.existingSecretPasswordKey }}"
+      - name: KC_DATABASE_ROLE
+        valueFrom:
+          secretKeyRef:
+            name: "{{ .Values.playground.secret.name }}"
+            key: "{{ .Values.keycloak.externalDatabase.existingSecretUserKey }}"
       - name: PGRST_AUTHENTICATOR_PASSWORD
         valueFrom:
           secretKeyRef:
-            name: *configSecretName
-            key: password
-      - name: PGRST_AUTHENTICATOR_ROLE
-        value: *postgrestAuthenticatorRole
-      - name: PGRST_ANONYMOUS_ROLE
-        value: *postgrestAnonymousRole
-      - name: PGRST_DB_SCHEMAS
-        value: *postgrestSchema
-      - name: PGRST_LOGGEDIN_ROLE
-        value: *postgrestLoggedinRole
+            name: "{{ .Values.playground.secret.name }}"
+            key: "{{ .Values.postgresql.auth.secretKeys.userPasswordKey }}"
     initdb:
       scripts:
-        00_init.sh: |
+        00_init_keycloak.sh: |
           #!/bin/bash
 
           export PGPASSWORD=${POSTGRES_PASSWORD}
           psql -U ${POSTGRESQL_USERNAME} <<-END
-            create role ${PGRST_AUTHENTICATOR_ROLE} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
-            create role ${PGRST_ANONYMOUS_ROLE} nologin;
-            create role ${PGRST_LOGGEDIN_ROLE} nologin;
-            grant ${PGRST_ANONYMOUS_ROLE} to ${PGRST_AUTHENTICATOR_ROLE};
-            grant ${PGRST_LOGGEDIN_ROLE} to ${PGRST_AUTHENTICATOR_ROLE};
-            grant ${POSTGRESQL_USERNAME} to ${PGRST_LOGGEDIN_ROLE};
+            create role ${KC_DATABASE_ROLE} noinherit login password '${KC_DATABASE_PASSWORD}';
+            create database ${KC_DATABASE_DATABASE} owner ${KC_DATABASE_ROLE} encoding 'UTF8';
+          END
+        01_init_postgrest.sh: |
+          #!/bin/bash
 
-            create schema ${PGRST_DB_SCHEMAS};
-            grant usage on schema ${PGRST_DB_SCHEMAS} to ${PGRST_ANONYMOUS_ROLE};
-            grant usage on schema ${PGRST_DB_SCHEMAS} to ${PGRST_LOGGEDIN_ROLE};
+          export PGPASSWORD=${POSTGRES_PASSWORD}
+          psql -U ${POSTGRESQL_USERNAME} <<-END
+            create role {{ .Values.playground.postgrest.authenticatorRole }} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
+            create role {{ .Values.playground.postgrest.anonymousRole }} nologin;
+            create role {{ .Values.playground.postgrest.loggedinRole }} nologin;
+            grant {{ .Values.playground.postgrest.anonymousRole }} to {{ .Values.playground.postgrest.authenticatorRole }};
+            grant {{ .Values.playground.postgrest.loggedinRole }} to {{ .Values.playground.postgrest.authenticatorRole }};
+            grant ${POSTGRESQL_USERNAME} to {{ .Values.playground.postgrest.loggedinRole }};
+
+            create schema {{ .Values.playground.postgrest.schema }};
+            grant usage on schema {{ .Values.playground.postgrest.schema }} to {{ .Values.playground.postgrest.anonymousRole }};
+            grant usage on schema {{ .Values.playground.postgrest.schema }} to {{ .Values.playground.postgrest.loggedinRole }};
 
             NOTIFY pgrst, 'reload schema';
           END

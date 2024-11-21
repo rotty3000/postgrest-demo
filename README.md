@@ -20,11 +20,16 @@ Create a secret to contain security values:
     echo "$(LC_CTYPE=C LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c32)"
   }
 
-  kubectl create secret generic postgresql-secret \
+  kubectl create secret generic playground-secret \
    --from-literal=postgres-password="$(make_secret)" \
    --from-literal=password="$(make_secret)" \
    --from-literal=replication-password="$(make_secret)" \
-   --from-literal=jwt-secret="$(make_secret)"
+   --from-literal=postgres-host=postgrest-over-pgmq-postgresql \
+   --from-literal=postgres-port=5432 \
+   --from-literal=postgrest-jwt-secret="$(make_secret)" \
+   --from-literal=keycloak-postgres-user=keycloak \
+   --from-literal=keycloak-postgres-database=keycloak \
+   --from-literal=keycloak-postgres-password="$(make_secret)"
 ```
 
 > **TODO**: [Auto Generate Secret](https://itnext.io/manage-auto-generated-secrets-in-your-helm-charts-5aee48ba6918)
@@ -89,7 +94,7 @@ Ok, let's take the level up and generate a JWT we can use to leverage bulk updat
 Create a JWT token and hold it. We're using Bitnami's containerized version of [jwt-cli](https://github.com/mike-engel/jwt-cli) to simplify our lives. It helps us create HS256 JWT tokens from the command line:
 
 ```shell
-PGRST_JWT_SECRET=$(k get secrets postgresql-secret -o jsonpath="{.data['jwt-secret']}" | base64 -d)
+PGRST_JWT_SECRET=$(k get secrets playground-secret -o jsonpath="{.data['jwt-secret']}" | base64 -d)
 JWT_TOKEN="$(docker run --rm bitnami/jwt-cli encode -S ${PGRST_JWT_SECRET} -P role=loggedin)"
 ```
 
