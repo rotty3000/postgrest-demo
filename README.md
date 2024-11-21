@@ -38,6 +38,7 @@ Create a secret to contain security values:
    --from-literal=postgres-host=postgrest-over-pgmq-postgresql \
    --from-literal=postgres-port=5432 \
    --from-literal=postgrest-jwt-secret="$(make_secret)" \
+   --from-literal=keycloak-admin-password="$(make_secret)" \
    --from-literal=keycloak-postgres-user=keycloak \
    --from-literal=keycloak-postgres-database=keycloak \
    --from-literal=keycloak-postgres-password="$(make_secret)"
@@ -101,5 +102,6 @@ PGRST_JWT_SECRET=$(k get secrets playground-secret -o jsonpath="{.data['jwt-secr
 JWT_TOKEN="$(docker run --rm bitnami/jwt-cli encode -S ${PGRST_JWT_SECRET} -P role=loggedin)"
 
 
+KC_PASSWORD=$(k get secrets playground-secret -o jsonpath="{.data['keycloak-admin-password']}" | base64 -d)
 ```
 

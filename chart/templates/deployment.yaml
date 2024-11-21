@@ -45,29 +45,29 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "pgmq-postgrest.secretName" . }}
-                  key: password
+                  key: {{ default "password" .Values.postgresql.auth.secretKeys.userPasswordKey }}
             - name: PGPORT
               value: {{ default "5432" .Values.postgresql.containerPorts.postgresql | quote }}
             - name: PGRST_ADMIN_SERVER_PORT
-              value: {{ .Values.config.postgrest.healthCheckPort | quote }}
+              value: {{ .Values.playground.postgrest.healthCheckPort | quote }}
             - name: PGRST_DB_ANON_ROLE
-              value: {{ default "anonymous" .Values.config.postgrest.anonymousRole }}
+              value: {{ default "anonymous" .Values.playground.postgrest.anonymousRole }}
             - name: PGRST_DB_SCHEMAS
-              value: {{ default "rest" .Values.config.postgrest.schema }}
+              value: {{ default "rest" .Values.playground.postgrest.schema }}
             - name: PGRST_JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "pgmq-postgrest.secretName" . }}
-                  key: {{ default "jwt-secret" .Values.config.secret.jwtSecretKey }}
+                  key: {{ default "postgrest-jwt-secret" .Values.playground.postgrest.jwtSecretKey }}
             - name: PGUSER
-              value: {{ .Values.config.postgrest.authenticatorRole }}
-            {{- toYaml .Values.config.postgrest.extraEnvVars | nindent 12 }}
+              value: {{ .Values.playground.postgrest.authenticatorRole }}
+            {{- toYaml .Values.playground.postgrest.extraEnvVars | nindent 12 }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
             - name: health
-              containerPort: {{ .Values.config.postgrest.healthCheckPort }}
+              containerPort: {{ .Values.playground.postgrest.healthCheckPort }}
               protocol: TCP
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}

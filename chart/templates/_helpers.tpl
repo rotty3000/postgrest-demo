@@ -65,5 +65,5 @@ Create the name of the service account to use
 Create the name of the secret to use
 */}}
 {{- define "pgmq-postgrest.secretName" -}}
-{{- default "postgresql-secret" .Values.postgresql.auth.existingSecret }}
+{{- default "playground-secret" .Values.playground.secret.name }}
 {{- end }}

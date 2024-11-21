@@ -92,30 +92,37 @@ affinity: {}
 
 playground:
   postgrest:
-    anonymousRole: anonymous
-    authenticatorRole: authenticator
+    anonymousRole: &playgroundPostgrestAnonymousRole anonymous
+    authenticatorRole: &playgroundPostgrestAuthenticatorRole authenticator
     extraEnvVars:
       - name: PGRST_LOG_LEVEL
         value: debug
     healthCheckPort: 4000
     jwtSecretKey: postgrest-jwt-secret
-    loggedinRole: loggedin
-    schema: postgrest
+    loggedinRole: &playgroundPostgrestLoggedinRole loggedin
+    schema: &playgroundPostgrestSchema postgrest
   secret:
     createdManually: true
-    name: playground-secret
+    name: &playgroundSecretName playground-secret
 
 # Sub-charts
 
 keycloak:
+  auth:
+    adminUser: kadmin
+    existingSecret: *playgroundSecretName
+    passwordSecretKey: keycloak-admin-password
   enabled: true
+  extraEnvVars:
+    - name: KC_HOSTNAME_STRICT_HTTPS
+      value: "false"
   externalDatabase:
-    existingSecret: "{{ .Values.playground.secret.name }}"
-    existingSecretDatabaseKey: '{{ .Release.Name }}-{{ default "postgresql" .Values.postgresql.nameOverride }}'
+    existingSecret: *playgroundSecretName
+    existingSecretDatabaseKey: &keycloakExternalDatabaseExistingSecretDatabaseKey keycloak-postgres-database
     existingSecretHostKey: postgres-host
-    existingSecretPasswordKey: postgres-keycloak-password
+    existingSecretPasswordKey: &keycloakExternalDatabaseExistingSecretPasswordKey keycloak-postgres-password
     existingSecretPortKey: postgres-port
-    existingSecretUserKey: postgres-keycloak-user
+    existingSecretUserKey: &keycloakExternalDatabaseExistingSecretUserKey keycloak-postgres-user
   ingress:
     enabled: true
     labels:
@@ -134,9 +141,9 @@ rabbitmq:
 postgresql:
   auth:
     database: postgres
-    existingSecret: "{{ .Values.playground.secret.name }}"
+    existingSecret: *playgroundSecretName
     secretKeys:
-      userPasswordKey: password
+      userPasswordKey: &postgresqlAuthSecretKeysUserPasswordKey password
 
   enabled: true
   image:
@@ -150,23 +157,31 @@ postgresql:
       - name: KC_DATABASE_DATABASE
         valueFrom:
           secretKeyRef:
-            name: "{{ .Values.playground.secret.name }}"
-            key: "{{ .Values.keycloak.externalDatabase.existingSecretDatabaseKey }}"
+            name: *playgroundSecretName
+            key: *keycloakExternalDatabaseExistingSecretDatabaseKey
       - name: KC_DATABASE_PASSWORD
         valueFrom:
           secretKeyRef:
-            name: "{{ .Values.playground.secret.name }}"
-            key: "{{ .Values.keycloak.externalDatabase.existingSecretPasswordKey }}"
+            name: *playgroundSecretName
+            key: *keycloakExternalDatabaseExistingSecretPasswordKey
       - name: KC_DATABASE_ROLE
         valueFrom:
           secretKeyRef:
-            name: "{{ .Values.playground.secret.name }}"
-            key: "{{ .Values.keycloak.externalDatabase.existingSecretUserKey }}"
+            name: *playgroundSecretName
+            key: *keycloakExternalDatabaseExistingSecretUserKey
+      - name: PGRST_ANONYMOUS_ROLE
+        value: *playgroundPostgrestAnonymousRole
+      - name: PGRST_AUTHENTICATOR_ROLE
+        value: *playgroundPostgrestAuthenticatorRole
       - name: PGRST_AUTHENTICATOR_PASSWORD
         valueFrom:
           secretKeyRef:
-            name: "{{ .Values.playground.secret.name }}"
-            key: "{{ .Values.postgresql.auth.secretKeys.userPasswordKey }}"
+            name: *playgroundSecretName
+            key: *postgresqlAuthSecretKeysUserPasswordKey
+      - name: PGRST_LOGGEDIN_ROLE
+        value: *playgroundPostgrestLoggedinRole
+      - name: PGRST_SCHEMA
+        value: *playgroundPostgrestSchema
     initdb:
       scripts:
         00_init_keycloak.sh: |
@@ -182,16 +197,16 @@ postgresql:
 
           export PGPASSWORD=${POSTGRES_PASSWORD}
           psql -U ${POSTGRESQL_USERNAME} <<-END
-            create role {{ .Values.playground.postgrest.authenticatorRole }} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
-            create role {{ .Values.playground.postgrest.anonymousRole }} nologin;
-            create role {{ .Values.playground.postgrest.loggedinRole }} nologin;
-            grant {{ .Values.playground.postgrest.anonymousRole }} to {{ .Values.playground.postgrest.authenticatorRole }};
-            grant {{ .Values.playground.postgrest.loggedinRole }} to {{ .Values.playground.postgrest.authenticatorRole }};
-            grant ${POSTGRESQL_USERNAME} to {{ .Values.playground.postgrest.loggedinRole }};
+            create role ${PGRST_AUTHENTICATOR_ROLE} noinherit login password '${PGRST_AUTHENTICATOR_PASSWORD}';
+            create role ${PGRST_ANONYMOUS_ROLE} nologin;
+            create role ${PGRST_LOGGEDIN_ROLE} nologin;
+            grant ${PGRST_ANONYMOUS_ROLE} to ${PGRST_AUTHENTICATOR_ROLE};
+            grant ${PGRST_LOGGEDIN_ROLE} to ${PGRST_AUTHENTICATOR_ROLE};
+            grant ${POSTGRESQL_USERNAME} to ${PGRST_LOGGEDIN_ROLE};
 
-            create schema {{ .Values.playground.postgrest.schema }};
-            grant usage on schema {{ .Values.playground.postgrest.schema }} to {{ .Values.playground.postgrest.anonymousRole }};
-            grant usage on schema {{ .Values.playground.postgrest.schema }} to {{ .Values.playground.postgrest.loggedinRole }};
+            create schema ${PGRST_SCHEMA};
+            grant usage on schema ${PGRST_SCHEMA} to ${PGRST_ANONYMOUS_ROLE};
+            grant usage on schema ${PGRST_SCHEMA} to ${PGRST_LOGGEDIN_ROLE};
 
             NOTIFY pgrst, 'reload schema';
           END
