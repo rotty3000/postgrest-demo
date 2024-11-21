@@ -96,71 +96,7 @@ Create a JWT token and hold it. We're using Bitnami's containerized version of [
 ```shell
 PGRST_JWT_SECRET=$(k get secrets playground-secret -o jsonpath="{.data['jwt-secret']}" | base64 -d)
 JWT_TOKEN="$(docker run --rm bitnami/jwt-cli encode -S ${PGRST_JWT_SECRET} -P role=loggedin)"
+
+
 ```
 
-### Create a Queue
-
-```shell
-curl -s "${PGRST_ADDRESS}/rpc/create" \
-	-H "Authorization: Bearer $JWT_TOKEN" \
-	--json '{"queue_name": "bar"}' | jq
-```
-
-### List Queues
-
-```shell
-curl -s ${PGRST_ADDRESS}/rpc/list_queues \
-	-H "Authorization: Bearer $JWT_TOKEN" \
-	-H "Content-Type: application/json" | jq
-[
-  {
-    "queue_name": "bar",
-    "is_partitioned": false,
-    "is_unlogged": false,
-    "created_at": "2024-11-14T21:14:15.035969+00:00"
-  }
-]
-```
-
-### Send a message to the queue
-
-```shell
-curl -s ${PGRST_ADDRESS}/rpc/send \
-	-H "Authorization: Bearer $JWT_TOKEN" \
-	--json '{"queue_name":"bar","msg":{"the":"message"}}' | jq
-[
-  1
-]
-```
-
-### Read a message from the queue
-
-```shell
-curl -s ${PGRST_ADDRESS}/rpc/read \
-	-H "Authorization: Bearer $JWT_TOKEN" \
-	--json '{"queue_name":"bar","qty": 10, "vt": 30}' | jq
-[
-  {
-    "msg_id": 1,
-    "read_ct": 1,
-    "enqueued_at": "2024-11-14T21:28:18.063172+00:00",
-    "vt": "2024-11-14T21:30:50.764849+00:00",
-    "message": {
-      "the": "message"
-    }
-  }
-]
-```
-
-### Archive a message from the queue
-
-```shell
-curl -s ${PGRST_ADDRESS}/rpc/archive \
-	-H "Authorization: Bearer $JWT_TOKEN" \
-	--json '{"queue_name":"bar","msg_ids": [1]}' | jq
-[
-  1
-]
-```
-
-## Using Helm
