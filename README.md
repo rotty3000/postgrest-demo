@@ -11,6 +11,17 @@ What you need to have installed locally:
 - `jq`
 - `k3d` (or any Kubernetes distribution)
 
+#### Create a Kubernetes cluster
+
+This uses k3d to create a local Kubernetes cluster
+
+```shell
+k3d cluster create playground \
+  -p "80:80@loadbalancer" \
+  -p "443:443@loadbalancer" \
+  --registry-create registry:0.0.0.0:5000
+```
+
 #### Initial Setup
 
 Create a secret to contain security values:
@@ -33,14 +44,6 @@ Create a secret to contain security values:
 ```
 
 > **TODO**: [Auto Generate Secret](https://itnext.io/manage-auto-generated-secrets-in-your-helm-charts-5aee48ba6918)
-
-#### Create a Kubernetes cluster
-
-This uses k3d to create a local Kubernetes cluster
-
-```shell
-k3d cluster create playground -p "8880:80@loadbalancer" --registry-create registry:0.0.0.0:5000
-```
 
 ### Install the chart
 
@@ -74,7 +77,7 @@ Look at at the objects in the schema:
 You can visit it at the following address:
 
 ```shell
-PGRST_ADDRESS="http://postgrest.docker.localhost:8880"
+PGRST_ADDRESS="http://postgrest.docker.localhost"
 
 curl ${PGRST_ADDRESS} | jq
 ```
