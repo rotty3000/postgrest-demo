@@ -38,18 +38,13 @@ helm upgrade -i postgrest-over-pgmq .
 
 ```shell
 KEYCLOAK_ADDRESS="http://keycloak.docker.localhost"
+KEYCLOAK_ADMIN_PASSWORD=$(k get secrets playground-secret -o jsonpath="{.data['keycloak-admin-password']}" | base64 -d)
 
 PGRST_ADDRESS="http://postgrest.docker.localhost"
 
 curl -s ${PGRST_ADDRESS} | jq '.paths | keys'
-```
 
-### Leftovers
-
-```shell
 PGRST_JWT_SECRET=$(k get secrets playground-secret -o jsonpath="{.data['jwt-secret']}" | base64 -d)
 
 JWT_TOKEN="$(docker run --rm bitnami/jwt-cli encode -S ${PGRST_JWT_SECRET} -P role=loggedin)"
-
-KC_PASSWORD=$(k get secrets playground-secret -o jsonpath="{.data['keycloak-admin-password']}" | base64 -d)
 ```
