@@ -102,8 +102,18 @@ playground:
     loggedinRole: &playgroundPostgrestLoggedinRole loggedin
     schema: &playgroundPostgrestSchema postgrest
   secret:
-    createdManually: true
     name: &playgroundSecretName playground-secret
+    values:
+      postgresPassword: ""
+      password: ""
+      replicationPassword: ""
+      postgresHost: "" # Defaults to "<chart-name>-postgresql"
+      postgresPort: "" # Defaults to "5432"
+      postgrestJwtSecret: ""
+      keycloakAdminPassword: ""
+      keycloakPostgresUser: "" # Defaults to "keycloak"
+      keycloakPostgresDatabase: "" # Defaults to "keycloak"
+      keycloakPostgresPassword: ""
 
 # Sub-charts
 

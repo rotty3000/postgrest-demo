@@ -22,30 +22,6 @@ k3d cluster create playground \
   --registry-create registry:0.0.0.0:5000
 ```
 
-#### Initial Setup
-
-Create a secret to contain security values:
-
-```shell
-  make_secret() {
-    echo "$(LC_CTYPE=C LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c32)"
-  }
-
-  kubectl create secret generic playground-secret \
-   --from-literal=postgres-password="$(make_secret)" \
-   --from-literal=password="$(make_secret)" \
-   --from-literal=replication-password="$(make_secret)" \
-   --from-literal=postgres-host=postgrest-over-pgmq-postgresql \
-   --from-literal=postgres-port=5432 \
-   --from-literal=postgrest-jwt-secret="$(make_secret)" \
-   --from-literal=keycloak-admin-password="$(make_secret)" \
-   --from-literal=keycloak-postgres-user=keycloak \
-   --from-literal=keycloak-postgres-database=keycloak \
-   --from-literal=keycloak-postgres-password="$(make_secret)"
-```
-
-> **TODO**: [Auto Generate Secret](https://itnext.io/manage-auto-generated-secrets-in-your-helm-charts-5aee48ba6918)
-
 ### Install the chart
 
 ```shell
@@ -61,6 +37,8 @@ helm upgrade -i postgrest-over-pgmq .
 ### List the paths from the OpenAPI schema
 
 ```shell
+KEYCLOAK_ADDRESS="http://keycloak.docker.localhost"
+
 PGRST_ADDRESS="http://postgrest.docker.localhost"
 
 curl -s ${PGRST_ADDRESS} | jq '.paths | keys'
