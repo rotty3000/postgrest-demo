@@ -58,3 +58,10 @@ dependencies:
     repository: oci://registry-1.docker.io/bitnamicharts
     version: 15.0.6
     condition: rabbitmq.enabled,global.rabbitmq.enabled
+
+  # Chart:     https://artifacthub.io/packages/helm/openfga/openfga
+  # Container:
+  - name: openfga
+    repository: https://openfga.github.io/helm-charts
+    version: 0.2.18
+    condition: openfga.enabled,global.openfga.enabled

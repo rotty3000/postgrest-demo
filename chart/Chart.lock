@@ -1,7 +1,7 @@
 dependencies:
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
-  version: 2.27.0
+  version: 2.28.0
 - name: postgresql
   repository: oci://registry-1.docker.io/bitnamicharts
   version: 16.2.1
@@ -14,5 +14,8 @@ dependencies:
 - name: rabbitmq
   repository: oci://registry-1.docker.io/bitnamicharts
   version: 15.0.6
-digest: sha256:832257f598fc2adb7666d7507374bc155d231aa60e5d4d018b86eef501d469e8
-generated: "2024-11-21T08:42:32.977268288-05:00"
+- name: openfga
+  repository: https://openfga.github.io/helm-charts
+  version: 0.2.18
+digest: sha256:fc54d83a1c6c745d4834d111415628df39f69ea8059e312fb2ef02ebfe1044a2
+generated: "2024-12-11T14:35:19.512437315-05:00"
